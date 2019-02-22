@@ -1,0 +1,120 @@
+---
+title: "Naive Bayes Wrapper Implementation"
+author: "Dieter Haage"
+date: "December 4, 2018"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+The **Naive Bayes** classifier makes the assumption of class conditional independence of predictors. Although the algorithm is robust, the presence of a large number of irrelevant predictors increases the chances that the independence assumption is violated. This may incur some level of loss in classification performance.
+
+Additionally, an unnecessarily large number of predictors makes the resulting model more difficult to interpret. The real world application of classifiers may require that the predictors used for classification be physically measured, therefore, the inclusion of unnecessary predictors may incur additional costs associated with sensors, instruments and computing. Some variables may even require human intervention and/or expensive laboratory analyses in order to be measured.
+
+It is therefore important that we try to use as few predictors as possible, or the smallest set of predictors that are relevant for the classification task, while still sufficient to provide satisfactory classification performance.
+
+
+The **Wrapper Naive Bayes** algorithm performs feature selection and Naive Bayes classification simultaneously:
+
+
+```{r}
+library(naivebayes)
+
+Mushrooms <- read.csv("https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data", header=FALSE, sep=",", dec=".", na.strings=c("?"))
+
+
+
+set.seed(0)
+
+no_observations <- dim(Mushrooms)[1]                   # total observations (8124)
+
+no_predictors <- dim(Mushrooms)[2] - 1                 # total predictors (22)
+
+# total variables (23) -
+
+# dependent var is the 1st column
+
+set.seed(0)
+
+Feature_Set <- c()                                     # Initialise Feature Subset (empty)
+
+Test_Error <- c()                                      # Initialise Error Subset
+
+for(Size_Feature_Set in 1:no_predictors){              # Continue for each predictor starting from 1
+  
+  best_accuracy <- -Inf
+  
+  for(feature in 2:(no_predictors+1)){                 # Skip 1st variable (class labels)
+    
+    if (!(feature %in% Feature_Set)){
+      
+      Test_Feature_Set <- c(Feature_Set, feature)
+      
+      accuracy <- 0
+      
+      for(i in 1:10){
+        
+        test_index <- sample(no_observations, size=as.integer(no_observations*0.2), replace=FALSE)
+        
+        # 20% test
+        
+        training_index <- -test_index                  # 80% training
+        
+        candidate_variables_index <- c(1, Test_Feature_Set) # "1" is the class variable (V1),
+        
+        # this vector selects specific data columns
+        
+        NaiveBayesModel <- naive_bayes(V1 ~. ,         # . takes the available data columns   
+                                       
+                                       data = Mushrooms[training_index, candidate_variables_index])
+        
+        Pred_class <- predict(NaiveBayesModel,
+                              
+                              newdata = Mushrooms[test_index, candidate_variables_index])
+        
+        tab <- table(Pred_class, Mushrooms[test_index,"V1"])
+        
+        accuracy <- accuracy + sum(diag(tab))/sum(tab)
+        
+      }
+      
+      accuracy <- accuracy/10
+      
+      if (accuracy > best_accuracy){ # get the best feature that contributes to improve accuracy
+        
+        best_accuracy <- accuracy
+        
+        best_new_feature <- feature
+        
+      }
+      
+    }
+    
+  }
+  
+  Feature_Set <- c(Feature_Set, best_new_feature)  # list of best features in each iteration
+  
+  print(Feature_Set)
+  
+  Test_Error <- c(Test_Error, 1-best_accuracy)     # calculate the error rate in each iteration
+  
+}
+
+plot(1:22,Test_Error) # finally plot the error rates
+```
+
+
+By plotting the classification error as a function of the feature subset |**S**| = **1**,...*n*, we notice that the error decreases as more features are added, but then increases after the 20th feature is added. This can be attributed to the violation of the independence assumption.
+
+If our aim is to outperform a model that uses the entire feature space, with as few features as possible, then using the first 4 features would be the best option. This is not the maximum performance that we could achieve, however it does use the fewest number of features, which in this case is optimal.
+
+Conclusion:
+
+Since Naive Bays is very fast, it is possible to 'wrap it up' into a feature selection method that follows a forward step wise subset selection approach. We can choose the best Naive Bayes classifier that uses a single predictor (trying every predictor, one at a time), and that uses the previously selected predictors alongside a new candidate predictor (trying one candidate at a time, from the predictors not yet selected). This is an efficient approach to feature selection as a form of dimensionality reduction, and could be used to add business value through cost minimization.
+
+
